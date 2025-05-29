@@ -308,6 +308,8 @@ async function submitVote(answerId) {
   }, 3000);
 }
 
+
+
 // async function showResults() {
 //   let votes = await db.collection('votes')
 //     .where('cohort', '==', cohort)
@@ -320,13 +322,19 @@ async function submitVote(answerId) {
 //     tally[aId] = (tally[aId] || 0) + 1;
 //   });
 
-//   let winner = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
-//   let answerDoc = await db.collection('answers').doc(winner).get();
-//   let data = answerDoc.data();
+//   let maxVotes = Math.max(...Object.values(tally));
+//   let winningIds = Object.keys(tally).filter(id => tally[id] === maxVotes);
 
-//   screenDiv.html(`<h2>🏆 Winner - Round ${currentRound}</h2><p><strong>Answer:</strong> ${data.answer}</p><p><strong>By:</strong> ${data.author}</p>`);
+//   screenDiv.html(`<h2>🏆 Winner(s) - Round ${currentRound}</h2>`);
+//   for (let id of winningIds) {
+//     let answerDoc = await db.collection('answers').doc(id).get();
+//     let data = answerDoc.data();
+//     screenDiv.child(createP(`<strong>Answer:</strong> ${data.answer}`));
+//     screenDiv.child(createP(`<strong>By:</strong> ${data.author}`));
+//   }
+
 //   currentRound++;
-//   setTimeout(() => nextRound(), 6000);
+//   setTimeout(() => nextRound(), 8000);
 // }
 
 async function showResults() {
@@ -345,9 +353,13 @@ async function showResults() {
   let winningIds = Object.keys(tally).filter(id => tally[id] === maxVotes);
 
   screenDiv.html(`<h2>🏆 Winner(s) - Round ${currentRound}</h2>`);
-  for (let id of winningIds) {
-    let answerDoc = await db.collection('answers').doc(id).get();
-    let data = answerDoc.data();
+
+  let winnerDocs = await Promise.all(
+    winningIds.map(id => db.collection('answers').doc(id).get())
+  );
+
+  for (let doc of winnerDocs) {
+    let data = doc.data();
     screenDiv.child(createP(`<strong>Answer:</strong> ${data.answer}`));
     screenDiv.child(createP(`<strong>By:</strong> ${data.author}`));
   }
