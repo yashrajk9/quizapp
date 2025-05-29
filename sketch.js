@@ -119,20 +119,52 @@ function waitForCohort() {
   }, 3000);
 }
 
+// async function nextRound() {
+//   screenDiv.html('');
+//   if (currentRound > totalRounds) {
+//     screenDiv.html('<h2>🎉 Quiz complete! Thank you for playing.</h2>');
+//     return;
+//   }
+//   let studentName = await selectUnusedName();
+//   currentPrompt = roundData[currentRound - 1].question.replace('[Student Name]', studentName);
+//   createElement('h2', `Round ${currentRound}`).parent(screenDiv);
+//   createP(currentPrompt).parent(screenDiv);
+//   answerInput = createInput('').attribute('placeholder', 'Type your answer').parent(screenDiv);
+//   answerSubmit = createButton('Submit Answer').parent(screenDiv);
+//   answerSubmit.mousePressed(() => submitAnswer(studentName));
+// }
+
 async function nextRound() {
   screenDiv.html('');
   if (currentRound > totalRounds) {
     screenDiv.html('<h2>🎉 Quiz complete! Thank you for playing.</h2>');
     return;
   }
-  let studentName = await selectUnusedName();
-  currentPrompt = roundData[currentRound - 1].question.replace('[Student Name]', studentName);
+
+  let promptRef = db.collection('prompts').doc(`${cohort}_round${currentRound}`);
+  let doc = await promptRef.get();
+
+  if (!doc.exists) {
+    // First user to generate the prompt
+    let studentName = await selectUnusedName();
+    currentPrompt = roundData[currentRound - 1].question.replace('[Student Name]', studentName);
+    await promptRef.set({
+      cohort,
+      round: currentRound,
+      prompt: currentPrompt,
+      timestamp: new Date()
+    });
+  } else {
+    currentPrompt = doc.data().prompt;
+  }
+
   createElement('h2', `Round ${currentRound}`).parent(screenDiv);
   createP(currentPrompt).parent(screenDiv);
   answerInput = createInput('').attribute('placeholder', 'Type your answer').parent(screenDiv);
   answerSubmit = createButton('Submit Answer').parent(screenDiv);
-  answerSubmit.mousePressed(() => submitAnswer(studentName));
+  answerSubmit.mousePressed(() => submitAnswer());
 }
+
 
 async function selectUnusedName() {
   let query = await db.collection('registrations')
@@ -144,7 +176,31 @@ async function selectUnusedName() {
   return doc.data().name;
 }
 
-async function submitAnswer(studentName) {
+// async function submitAnswer(studentName) {
+//   let answer = answerInput.value().trim();
+//   if (!answer) return alert('Please enter an answer.');
+//   await db.collection('answers').add({
+//     answer,
+//     author: userName,
+//     round: currentRound,
+//     cohort,
+//     prompt: currentPrompt,
+//     timestamp: new Date()
+//   });
+//   screenDiv.html('<p>✅ Answer submitted! Waiting for others...</p>');
+//   let interval = setInterval(async () => {
+//     let snapshot = await db.collection('answers')
+//       .where('cohort', '==', cohort)
+//       .where('round', '==', currentRound)
+//       .get();
+//     if (snapshot.size >= cohortSize) {
+//       clearInterval(interval);
+//       showVotingScreen(snapshot);
+//     }
+//   }, 3000);
+// }
+
+async function submitAnswer() {
   let answer = answerInput.value().trim();
   if (!answer) return alert('Please enter an answer.');
   await db.collection('answers').add({
@@ -156,6 +212,7 @@ async function submitAnswer(studentName) {
     timestamp: new Date()
   });
   screenDiv.html('<p>✅ Answer submitted! Waiting for others...</p>');
+
   let interval = setInterval(async () => {
     let snapshot = await db.collection('answers')
       .where('cohort', '==', cohort)
@@ -167,6 +224,8 @@ async function submitAnswer(studentName) {
     }
   }, 3000);
 }
+
+
 
 function showVotingScreen(snapshot) {
   screenDiv.html(`<h2>Vote - Round ${currentRound}</h2><p>Tap your favorite answer:</p>`);
