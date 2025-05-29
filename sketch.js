@@ -119,19 +119,37 @@ function waitForCohort() {
   }, 3000);
 }
 
+
+
 // async function nextRound() {
 //   screenDiv.html('');
 //   if (currentRound > totalRounds) {
 //     screenDiv.html('<h2>🎉 Quiz complete! Thank you for playing.</h2>');
 //     return;
 //   }
-//   let studentName = await selectUnusedName();
-//   currentPrompt = roundData[currentRound - 1].question.replace('[Student Name]', studentName);
+
+//   let promptRef = db.collection('prompts').doc(`${cohort}_round${currentRound}`);
+//   let doc = await promptRef.get();
+
+//   if (!doc.exists) {
+//     // First user to generate the prompt
+//     let studentName = await selectUnusedName();
+//     currentPrompt = roundData[currentRound - 1].question.replace('[Student Name]', studentName);
+//     await promptRef.set({
+//       cohort,
+//       round: currentRound,
+//       prompt: currentPrompt,
+//       timestamp: new Date()
+//     });
+//   } else {
+//     currentPrompt = doc.data().prompt;
+//   }
+
 //   createElement('h2', `Round ${currentRound}`).parent(screenDiv);
 //   createP(currentPrompt).parent(screenDiv);
 //   answerInput = createInput('').attribute('placeholder', 'Type your answer').parent(screenDiv);
 //   answerSubmit = createButton('Submit Answer').parent(screenDiv);
-//   answerSubmit.mousePressed(() => submitAnswer(studentName));
+//   answerSubmit.mousePressed(() => submitAnswer());
 // }
 
 async function nextRound() {
@@ -141,22 +159,54 @@ async function nextRound() {
     return;
   }
 
-  let promptRef = db.collection('prompts').doc(`${cohort}_round${currentRound}`);
-  let doc = await promptRef.get();
+  const promptRef = db.collection('prompts').doc(`${cohort}_round${currentRound}`);
+  const promptDoc = await promptRef.get();
 
-  if (!doc.exists) {
-    // First user to generate the prompt
-    let studentName = await selectUnusedName();
-    currentPrompt = roundData[currentRound - 1].question.replace('[Student Name]', studentName);
-    await promptRef.set({
-      cohort,
-      round: currentRound,
-      prompt: currentPrompt,
-      timestamp: new Date()
-    });
-  } else {
-    currentPrompt = doc.data().prompt;
+  if (!promptDoc.exists) {
+    // Only first user will enter this block and run the transaction
+    try {
+      await db.runTransaction(async (transaction) => {
+        // Re-check inside transaction
+        const freshPromptDoc = await transaction.get(promptRef);
+        if (freshPromptDoc.exists) return; // someone beat us
+
+        // Get unused name
+        const regSnap = await db.collection('registrations')
+          .where('cohort', '==', cohort)
+          .where('roundUsed', '==', false)
+          .limit(1)
+          .get();
+
+        if (regSnap.empty) {
+          throw new Error('No unused names available.');
+        }
+
+        const doc = regSnap.docs[0];
+        const studentName = doc.data().name;
+
+        // Mark student as used
+        transaction.update(doc.ref, { roundUsed: true });
+
+        // Write prompt to promptRef
+        const promptText = roundData[currentRound - 1].question.replace('[Student Name]', studentName);
+        transaction.set(promptRef, {
+          cohort,
+          round: currentRound,
+          prompt: promptText,
+          studentName,
+          timestamp: new Date()
+        });
+
+        currentPrompt = promptText;
+      });
+    } catch (error) {
+      console.error("Transaction failed:", error);
+    }
   }
+
+  // Fetch the final prompt (whether we wrote it or someone else did)
+  const finalPromptDoc = await promptRef.get();
+  currentPrompt = finalPromptDoc.data().prompt;
 
   createElement('h2', `Round ${currentRound}`).parent(screenDiv);
   createP(currentPrompt).parent(screenDiv);
@@ -164,6 +214,7 @@ async function nextRound() {
   answerSubmit = createButton('Submit Answer').parent(screenDiv);
   answerSubmit.mousePressed(() => submitAnswer());
 }
+
 
 
 async function selectUnusedName() {
