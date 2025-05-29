@@ -23,7 +23,7 @@ let roundData = [
     concepts: ["Merit vs. need aid", "Hidden subsidies", "Privilege"]
   },
   {
-    question: "If [Student Name] were stuck in an elevator with a libertarian, a utilitarian, and a Rawlsian philosopher, and they had to solve college inequality in 5 minutes, what compromise solution would they propose?",
+    question: "If [Student Name] had to solve college inequality by choosing 1 of these definitions of fairness, which one would be picked ? There are different philosophical ideas around fairness applicable to university admissions. Libertarian believe that the market should decide access to education, with minimal government involvement. Utilitarian supporting policies that produce the greatest overall benefit for society, even if not everyone is treated the same. Kantian treating everyone equally regardless of the outcome Aristotle focused on building good character and virtues, moral growth through education. ",
     concepts: ["Justice theories", "Fairness approaches"]
   },
   {
@@ -308,6 +308,27 @@ async function submitVote(answerId) {
   }, 3000);
 }
 
+// async function showResults() {
+//   let votes = await db.collection('votes')
+//     .where('cohort', '==', cohort)
+//     .where('round', '==', currentRound)
+//     .get();
+
+//   let tally = {};
+//   votes.forEach(v => {
+//     let aId = v.data().answerId;
+//     tally[aId] = (tally[aId] || 0) + 1;
+//   });
+
+//   let winner = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
+//   let answerDoc = await db.collection('answers').doc(winner).get();
+//   let data = answerDoc.data();
+
+//   screenDiv.html(`<h2>🏆 Winner - Round ${currentRound}</h2><p><strong>Answer:</strong> ${data.answer}</p><p><strong>By:</strong> ${data.author}</p>`);
+//   currentRound++;
+//   setTimeout(() => nextRound(), 6000);
+// }
+
 async function showResults() {
   let votes = await db.collection('votes')
     .where('cohort', '==', cohort)
@@ -320,11 +341,17 @@ async function showResults() {
     tally[aId] = (tally[aId] || 0) + 1;
   });
 
-  let winner = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
-  let answerDoc = await db.collection('answers').doc(winner).get();
-  let data = answerDoc.data();
+  let maxVotes = Math.max(...Object.values(tally));
+  let winningIds = Object.keys(tally).filter(id => tally[id] === maxVotes);
 
-  screenDiv.html(`<h2>🏆 Winner - Round ${currentRound}</h2><p><strong>Answer:</strong> ${data.answer}</p><p><strong>By:</strong> ${data.author}</p>`);
+  screenDiv.html(`<h2>🏆 Winner(s) - Round ${currentRound}</h2>`);
+  for (let id of winningIds) {
+    let answerDoc = await db.collection('answers').doc(id).get();
+    let data = answerDoc.data();
+    screenDiv.child(createP(`<strong>Answer:</strong> ${data.answer}`));
+    screenDiv.child(createP(`<strong>By:</strong> ${data.author}`));
+  }
+
   currentRound++;
-  setTimeout(() => nextRound(), 6000);
+  setTimeout(() => nextRound(), 8000);
 }
